@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "source_repository": "USHIKUNDESUYO/yuhitsu-shohyo",
+  "source_commit": "52dcd61ebf62b9dcd7f76cfbc4a1fd014ad9682a",
+  "source_path": "poc/metric_layers.py",
+  "source_git_blob": "8b75e4dc1e99214cd859e4c296a46f3bc9816976",
+  "source_sha256": "c5104e667f1cf5f7c6c5e264bc4634c50665129a73d435a97f3f319d275cfd88",
+  "code_modified": false,
+  "purpose": "Offline aggregation of existing result JSON, research source preview",
+  "license": "MIT",
+  "license_scope": "This selected original script and accompanying guide and format fixture only",
+  "license_applied_to_original_repository": false,
+  "third_party_binary_or_model_assets_included": false,
+  "original_development_history_included": false,
+  "example_is_fabricated_format_fixture": true,
+  "empirical_accuracy_or_saving_claim": false
+}

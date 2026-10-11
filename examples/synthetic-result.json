@@ -1,0 +1,32 @@
+{
+  "summary": {
+    "source_policy": "synthetic_only",
+    "dataset_id": "format-example-not-measurement",
+    "cases": 2,
+    "parse_failures": 0,
+    "field_accuracy": {
+      "vendor": 0.5,
+      "billed_total": 1.0
+    }
+  },
+  "results": [
+    {
+      "file": "fictional-001",
+      "doc_type": "invoice",
+      "status": "ok",
+      "match": {
+        "vendor": true,
+        "billed_total": true
+      }
+    },
+    {
+      "file": "fictional-002",
+      "doc_type": "invoice",
+      "status": "ok",
+      "match": {
+        "vendor": false,
+        "billed_total": true
+      }
+    }
+  ]
+}
