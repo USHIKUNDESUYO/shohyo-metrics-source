@@ -5,13 +5,16 @@
   "source_path": "poc/metric_layers.py",
   "source_git_blob": "8b75e4dc1e99214cd859e4c296a46f3bc9816976",
   "source_sha256": "c5104e667f1cf5f7c6c5e264bc4634c50665129a73d435a97f3f319d275cfd88",
-  "code_modified": false,
+  "code_modified": true,
   "purpose": "Offline aggregation of existing result JSON, research source preview",
   "license": "MIT",
-  "license_scope": "This selected original script and accompanying guide and format fixture only",
+  "license_scope": "This selected script and accompanying guide, format fixture and regression tests only",
   "license_applied_to_original_repository": false,
   "third_party_binary_or_model_assets_included": false,
   "original_development_history_included": false,
   "example_is_fabricated_format_fixture": true,
-  "empirical_accuracy_or_saving_claim": false
+  "empirical_accuracy_or_saving_claim": false,
+  "based_on_public_commit": "ad6b043268302152edbfed2f48b22d447bef9399",
+  "modification": "Validate numeric ranges and JSON boolean flags before aggregation; reject malformed input with a concise CLI error.",
+  "distributed_script_sha256": "3f4bc184c4d724396a96fff514dcb2f54a0ec945bafa637b98a5b4ae8aa22ffa"
 }

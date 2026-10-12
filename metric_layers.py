@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -22,7 +23,9 @@ DEFAULT_ACCURACY_TARGET = 0.999
 
 
 def load_result(path: str | Path) -> dict:
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    def invalid_constant(value: str) -> None:
+        raise ValueError(f"JSONに数値ではない定数{value}があります")
+    return json.loads(Path(path).read_text(encoding="utf-8"), parse_constant=invalid_constant)
 
 
 def result_kind(result: dict) -> str:
@@ -32,7 +35,21 @@ def result_kind(result: dict) -> str:
     return "extraction"
 
 
+def valid_number(value: object, *, maximum: float | None = None) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    # Compare integer values before isfinite to avoid overflowing Python's float conversion.
+    if value < 0 or (maximum is not None and value > maximum):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def validate_result(result: dict) -> None:
+    if not isinstance(result, dict):
+        raise ValueError("result JSON はオブジェクトにしてください")
     summary = result.get("summary")
     if not isinstance(summary, dict):
         raise ValueError("result JSON に summary object がありません")
@@ -41,6 +58,47 @@ def validate_result(result: dict) -> None:
         raise ValueError("result JSON の results は list である必要があります")
     if "cases" not in summary and results is None:
         raise ValueError("result JSON に cases または results がありません")
+    for key in ["cases", "parse_failures"]:
+        value = summary.get(key)
+        if key not in summary or (key == "parse_failures" and value is None):
+            continue
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"summary.{key} は0以上の整数にしてください")
+    for key in ["cases_by_type", "field_accuracy", "accuracy_by_doc_type", "run_config"]:
+        value = summary.get(key)
+        if value is not None and not isinstance(value, dict):
+            raise ValueError(f"summary.{key} はオブジェクトにしてください")
+    for key, value in (summary.get("cases_by_type") or {}).items():
+        if not isinstance(key, str) or isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError("summary.cases_by_type は文字列の種類名と0以上の整数の件数にしてください")
+    for key in ["match_accuracy", "headline_billed_total_accuracy"]:
+        value = summary.get(key)
+        if value is not None and not valid_number(value, maximum=1):
+            raise ValueError(f"summary.{key} は0以上1以下の有限の数値にしてください")
+    for field, value in (summary.get("field_accuracy") or {}).items():
+        if not valid_number(value, maximum=1):
+            raise ValueError(f"summary.field_accuracy.{field} は0以上1以下の有限の数値にしてください")
+    for key in ["avg_elapsed_sec", "max_elapsed_sec"]:
+        value = summary.get(key)
+        if value is not None and not valid_number(value):
+            raise ValueError(f"summary.{key} は0以上の有限の数値にしてください")
+    for i, row in enumerate(results or [], 1):
+        prefix = f"resultsの{i}件目"
+        if not isinstance(row, dict):
+            raise ValueError(f"{prefix} はオブジェクトにしてください")
+        for key in ["doc_type", "method", "file", "status"]:
+            if row.get(key) is not None and not isinstance(row[key], str):
+                raise ValueError(f"{prefix}の{key} は文字列にしてください")
+        if "correct" in row and not isinstance(row["correct"], bool):
+            raise ValueError(f"{prefix}のcorrect はJSONのtrueまたはfalseにしてください")
+        match = row.get("match")
+        if match is not None and not isinstance(match, dict):
+            raise ValueError(f"{prefix}のmatch はオブジェクトにしてください")
+        for field, value in (match or {}).items():
+            if not isinstance(value, bool):
+                raise ValueError(f"{prefix}のmatch.{field} はJSONのtrueまたはfalseにしてください")
+        if row.get("elapsed_sec") is not None and not valid_number(row["elapsed_sec"]):
+            raise ValueError(f"{prefix}のelapsed_sec は0以上の有限の数値にしてください")
 
 
 def dataset_layer(summary: dict, results: list[dict]) -> dict:
@@ -173,12 +231,12 @@ def quality_gate_layer(kind: str, layers: dict, *, target: float = DEFAULT_ACCUR
 
     if kind == "matching":
         accuracy = layers["matching"].get("match_accuracy")
-        if not isinstance(accuracy, (int, float)) or accuracy < target:
+        if not valid_number(accuracy, maximum=1) or accuracy < target:
             reasons.append("match_accuracy_below_target")
             manual_review_triggers.append("match_accuracy_below_target")
     else:
         min_field_accuracy = layers["extraction"].get("min_field_accuracy")
-        if not isinstance(min_field_accuracy, (int, float)) or min_field_accuracy < target:
+        if not valid_number(min_field_accuracy, maximum=1) or min_field_accuracy < target:
             reasons.append("field_accuracy_below_target")
             manual_review_triggers.append("field_accuracy_below_target")
 
@@ -252,11 +310,11 @@ def main() -> None:
     path = Path(args.result_json)
     try:
         layers = build_layers(load_result(path))
-    except ValueError as e:
+    except (ValueError, OSError) as e:
         print(f"metric layer 生成を停止しました: {e}", file=sys.stderr)
         raise SystemExit(1) from e
     if args.json:
-        print(json.dumps(layers, ensure_ascii=False, indent=2))
+        print(json.dumps(layers, ensure_ascii=False, indent=2, allow_nan=False))
     else:
         print(render_markdown(path, layers))
 
