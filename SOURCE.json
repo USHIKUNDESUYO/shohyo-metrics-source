@@ -14,7 +14,7 @@
   "original_development_history_included": false,
   "example_is_fabricated_format_fixture": true,
   "empirical_accuracy_or_saving_claim": false,
-  "based_on_public_commit": "942fc7fcc272a64fdd86d6127d0ff89ae9c4a351",
-  "modification": "Retain numeric and boolean validation; reject duplicate JSON field names before aggregation without choosing a value.",
-  "distributed_script_sha256": "a75e51999792b4700d45028512a15449c8fd72b49e9c3e355ab40549cd84d843"
+  "based_on_public_commit": "5f25a53761f7bab0f04526dd4cb2f38628f02c22",
+  "modification": "Retain numeric, boolean and duplicate-key validation; require human review when the evaluated case count is zero.",
+  "distributed_script_sha256": "a56e9751a5250fa072d2c8df6124a455ee3c2319184c208abc77bd98a8374852"
 }

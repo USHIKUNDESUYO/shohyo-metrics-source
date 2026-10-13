@@ -230,6 +230,11 @@ def quality_gate_layer(kind: str, layers: dict, *, target: float = DEFAULT_ACCUR
     reasons: list[str] = []
     manual_review_triggers: list[str] = []
 
+    cases = (layers.get("dataset") or {}).get("cases")
+    if type(cases) is not int or cases <= 0:
+        reasons.append("no_cases")
+        manual_review_triggers.append("no_cases")
+
     if failures.get("parse_failures", 0):
         reasons.append("parse_failure")
         manual_review_triggers.append("parse_failure")

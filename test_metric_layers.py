@@ -252,5 +252,68 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("Traceback", result.stderr)
 
 
+class EmptyDatasetTests(unittest.TestCase):
+    def assert_no_cases(self, result):
+        layers = metrics.build_layers(result)
+        self.assertEqual(layers["dataset"]["cases"], 0)
+        self.assertEqual(layers["quality_gate"]["status"], "human_review_required")
+        self.assertIn("no_cases", layers["quality_gate"]["reasons"])
+        self.assertIn("no_cases", layers["quality_gate"]["manual_review_triggers"])
+        return layers
+
+    def test_zero_matching_cases_cannot_pass(self):
+        self.assert_no_cases({"summary": {"cases": 0, "match_accuracy": 1}, "results": []})
+
+    def test_zero_extraction_cases_cannot_pass(self):
+        self.assert_no_cases({"summary": {"cases": 0, "field_accuracy": {"vendor": 1}}, "results": []})
+
+    def test_omitted_count_and_empty_results_require_review(self):
+        for accuracy in [{"match_accuracy": 1}, {"field_accuracy": {"vendor": 1}}]:
+            with self.subTest(accuracy=accuracy):
+                self.assert_no_cases({"summary": accuracy, "results": []})
+
+    def test_summary_only_zero_count_requires_review(self):
+        for accuracy in [{"match_accuracy": 1}, {"field_accuracy": {"vendor": 1}}]:
+            with self.subTest(accuracy=accuracy):
+                self.assert_no_cases({"summary": {"cases": 0, **accuracy}})
+
+    def test_cli_empty_dataset_emits_review_in_both_modes_with_exit_zero(self):
+        content = json.dumps({"summary": {"cases": 0, "match_accuracy": 1}, "results": []})
+        runner = CliTests()
+        for json_output in [True, False]:
+            with self.subTest(json_output=json_output):
+                output = runner.run_cli(content, json_output=json_output)
+                self.assertEqual(output.returncode, 0)
+                self.assertEqual(output.stderr, "")
+                if json_output:
+                    self.assertEqual(json.loads(output.stdout)["quality_gate"]["reasons"], ["no_cases"])
+                else:
+                    self.assertIn("quality_gate: `human_review_required`", output.stdout)
+
+    def test_direct_gate_missing_or_invalid_case_count_never_passes(self):
+        layers = metrics.build_layers(matching())
+        for value in [None, 0, -1, True, False, "1", 1.0, float("nan")]:
+            with self.subTest(value=value):
+                layers["dataset"]["cases"] = value
+                gate = metrics.quality_gate_layer("matching", layers)
+                self.assertEqual(gate["status"], "human_review_required")
+                self.assertIn("no_cases", gate["reasons"])
+        del layers["dataset"]
+        self.assertIn("no_cases", metrics.quality_gate_layer("matching", layers)["reasons"])
+
+    def test_zero_cases_retains_other_review_reasons(self):
+        layers = self.assert_no_cases({"summary": {"cases": 0, "match_accuracy": 0.5, "parse_failures": 1}})
+        self.assertEqual(layers["quality_gate"]["reasons"], ["match_accuracy_below_target", "no_cases", "parse_failure"])
+        self.assertEqual(layers["failures"]["parse_failures"], 1)
+
+    def test_summary_only_positive_cases_remain_supported(self):
+        for accuracy in [{"match_accuracy": 1}, {"field_accuracy": {"vendor": 1}}]:
+            with self.subTest(accuracy=accuracy):
+                result = {"summary": {"cases": 1, **accuracy}}
+                before = copy.deepcopy(result)
+                self.assertEqual(metrics.build_layers(result)["quality_gate"]["status"], "pass")
+                self.assertEqual(result, before)
+
+
 if __name__ == "__main__":
     unittest.main()
