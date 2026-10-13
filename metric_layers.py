@@ -25,7 +25,15 @@ DEFAULT_ACCURACY_TARGET = 0.999
 def load_result(path: str | Path) -> dict:
     def invalid_constant(value: str) -> None:
         raise ValueError(f"JSONに数値ではない定数{value}があります")
-    return json.loads(Path(path).read_text(encoding="utf-8"), parse_constant=invalid_constant)
+    def unique_fields(pairs):
+        values = {}
+        for key, value in pairs:
+            if key in values:
+                raise ValueError(f"JSONの項目名 {key!r} が同じオブジェクト内で重複しています。1つに直してください")
+            values[key] = value
+        return values
+    return json.loads(Path(path).read_text(encoding="utf-8"), parse_constant=invalid_constant,
+                      object_pairs_hook=unique_fields)
 
 
 def result_kind(result: dict) -> str:

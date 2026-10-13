@@ -164,6 +164,53 @@ class CliTests(unittest.TestCase):
             args = [sys.executable, "-B", "-X", "utf8", str(ROOT / "metric_layers.py"), str(path)]
             return subprocess.run(args + (["--json"] if json_output else []), capture_output=True, text=True, encoding="utf-8")
 
+    def assert_duplicate_rejected(self, content, key):
+        for json_output in [True, False]:
+            with self.subTest(json_output=json_output):
+                result = self.run_cli(content, json_output=json_output)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("重複", result.stderr)
+                self.assertIn(key, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
+    def test_cli_duplicate_accuracy_does_not_choose_a_passing_value(self):
+        for first in [0, 1]:
+            with self.subTest(first=first):
+                self.assert_duplicate_rejected('{"summary":{"cases":1,"match_accuracy":' + str(first) + ',"match_accuracy":1},"results":[{"correct":true}]}', "match_accuracy")
+
+    def test_cli_duplicate_correct_does_not_turn_failure_into_hit(self):
+        for first in ["false", "true"]:
+            with self.subTest(first=first):
+                self.assert_duplicate_rejected('{"summary":{"cases":1,"match_accuracy":1},"results":[{"correct":' + first + ',"correct":true}]}', "correct")
+
+    def test_cli_duplicate_top_level_container_is_rejected(self):
+        for content, key in [
+            ('{"summary":{"cases":1,"match_accuracy":0},"summary":{"cases":1,"match_accuracy":1}}', "summary"),
+            ('{"summary":{"cases":1,"match_accuracy":1},"results":[{"correct":false}],"results":[{"correct":true}]}', "results")]:
+            with self.subTest(key=key):
+                self.assert_duplicate_rejected(content, key)
+
+    def test_cli_duplicate_nested_fields_and_metadata_are_rejected(self):
+        for container, fields, key in [
+            ("field_accuracy", '"vendor":0,"vendor":1', "vendor"),
+            ("cases_by_type", '"invoice":1,"invoice":2', "invoice"),
+            ("run_config", '"prompt_sha256":"first","prompt_sha256":"second"', "prompt_sha256")]:
+            with self.subTest(container=container):
+                self.assert_duplicate_rejected('{"summary":{"cases":1,"match_accuracy":1,"' + container + '":{' + fields + '}}}', key)
+
+    def test_cli_unicode_escape_alias_is_detected_after_json_decoding(self):
+        self.assert_duplicate_rejected(r'{"summary":{"cases":1,"match_accuracy":0,"match\u005faccuracy":1}}', "match_accuracy")
+
+    def test_cli_same_fields_in_distinct_cases_remain_valid(self):
+        content = json.dumps({"summary":{"cases":2,"match_accuracy":0.5},"results":[{"correct":True,"method":"synthetic"},{"correct":False,"method":"synthetic"}]})
+        result = self.run_cli(content)
+        self.assertEqual(result.returncode, 0)
+        layers = json.loads(result.stdout)
+        self.assertEqual(layers["matching"]["method_accuracy"], {"synthetic":0.5})
+        self.assertEqual(layers["failures"]["incorrect_cases"], 1)
+        self.assertEqual(layers["quality_gate"]["status"], "human_review_required")
+
     def test_cli_nan_and_infinity_never_emit_pass_or_stdout(self):
         for value in ["NaN", "Infinity", "-Infinity", "1e309"]:
             with self.subTest(value=value):
