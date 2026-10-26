@@ -315,5 +315,75 @@ class EmptyDatasetTests(unittest.TestCase):
                 self.assertEqual(result, before)
 
 
+class CaseCountConsistencyTests(unittest.TestCase):
+    def assert_mismatch(self, result, declared, observed):
+        before = copy.deepcopy(result)
+        layers = metrics.build_layers(result)
+        self.assertEqual(layers["dataset"]["cases"], declared)
+        self.assertEqual(layers["dataset"]["result_rows"], observed)
+        self.assertTrue(layers["dataset"]["case_count_mismatch"])
+        self.assertEqual(layers["quality_gate"]["status"], "human_review_required")
+        self.assertIn("case_count_mismatch", layers["quality_gate"]["reasons"])
+        self.assertIn("case_count_mismatch", layers["quality_gate"]["manual_review_triggers"])
+        self.assertEqual(result, before)
+        return layers
+
+    def test_declared_positive_empty_list_never_passes(self):
+        for result in [matching(), extraction()]:
+            result["results"] = []
+            self.assert_mismatch(result, 1, 0)
+
+    def test_fewer_rows_than_declared_requires_review(self):
+        for result in [matching(), extraction()]:
+            result["summary"]["cases"] = 3
+            self.assert_mismatch(result, 3, 1)
+
+    def test_more_rows_than_declared_requires_review(self):
+        result = matching(); result["results"].append({"correct": True})
+        self.assert_mismatch(result, 1, 2)
+
+    def test_zero_count_with_rows_retains_both_reasons(self):
+        result = matching(); result["summary"]["cases"] = 0
+        layers = self.assert_mismatch(result, 0, 1)
+        self.assertIn("no_cases", layers["quality_gate"]["reasons"])
+
+    def test_incorrect_case_reason_is_not_hidden(self):
+        result = matching(); result["summary"]["cases"] = 3
+        result["results"][0]["correct"] = False
+        layers = self.assert_mismatch(result, 3, 1)
+        self.assertIn("incorrect_cases", layers["quality_gate"]["reasons"])
+
+    def test_omitted_count_still_uses_result_length(self):
+        result = matching(); del result["summary"]["cases"]
+        layers = metrics.build_layers(result)
+        self.assertEqual(layers["dataset"]["cases"], 1)
+        self.assertNotIn("case_count_mismatch", layers["dataset"])
+        self.assertEqual(layers["quality_gate"]["status"], "pass")
+
+    def test_summary_only_and_null_results_remain_supported(self):
+        for result in [matching(), extraction()]:
+            del result["results"]
+            for value in [result, {**result, "results": None}]:
+                layers = metrics.build_layers(value)
+                self.assertNotIn("case_count_mismatch", layers["dataset"])
+                self.assertEqual(layers["quality_gate"]["status"], "pass")
+
+    def test_cli_reports_mismatch_with_exit_zero_in_both_modes(self):
+        result = matching(); result["results"] = []
+        runner = CliTests()
+        for json_output in [True, False]:
+            output = runner.run_cli(json.dumps(result), json_output=json_output)
+            self.assertEqual(output.returncode, 0)
+            self.assertEqual(output.stderr, "")
+            if json_output:
+                layers = json.loads(output.stdout)
+                self.assertEqual(layers["dataset"]["result_rows"], 0)
+                self.assertIn("case_count_mismatch", layers["quality_gate"]["reasons"])
+            else:
+                self.assertIn("quality_gate: `human_review_required`", output.stdout)
+                self.assertIn("result_rows: `0`", output.stdout)
+                self.assertIn("review_reason: `case_count_mismatch`", output.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

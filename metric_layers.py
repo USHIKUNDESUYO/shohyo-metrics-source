@@ -235,6 +235,10 @@ def quality_gate_layer(kind: str, layers: dict, *, target: float = DEFAULT_ACCUR
         reasons.append("no_cases")
         manual_review_triggers.append("no_cases")
 
+    if (layers.get("dataset") or {}).get("case_count_mismatch") is True:
+        reasons.append("case_count_mismatch")
+        manual_review_triggers.append("case_count_mismatch")
+
     if failures.get("parse_failures", 0):
         reasons.append("parse_failure")
         manual_review_triggers.append("parse_failure")
@@ -283,6 +287,11 @@ def build_layers(result: dict) -> dict:
         "failures": failure_layer(kind, summary, results),
         "provenance": provenance_layer(summary),
     }
+    # An explicit result list and the declared total are two different sources.
+    # Keep both values when inconsistent; do not silently replace either count.
+    if isinstance(result.get("results"), list) and "cases" in summary and summary["cases"] != len(results):
+        layers["dataset"]["result_rows"] = len(results)
+        layers["dataset"]["case_count_mismatch"] = True
     if kind == "matching":
         layers["matching"] = matching_layer(summary, results)
     else:
@@ -303,6 +312,9 @@ def render_markdown(path: Path, layers: dict) -> str:
         f"- incorrect_cases: `{layers['failures']['incorrect_cases']}`",
         f"- quality_gate: `{layers['quality_gate']['status']}`",
     ]
+    if layers["dataset"].get("case_count_mismatch") is True:
+        lines.append(f"- result_rows: `{layers['dataset']['result_rows']}`")
+        lines.append("- review_reason: `case_count_mismatch`")
     if layers["kind"] == "matching":
         lines.append(f"- match_accuracy: `{layers['matching']['match_accuracy']}`")
     else:

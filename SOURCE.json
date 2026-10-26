@@ -14,7 +14,7 @@
   "original_development_history_included": false,
   "example_is_fabricated_format_fixture": true,
   "empirical_accuracy_or_saving_claim": false,
-  "based_on_public_commit": "5f25a53761f7bab0f04526dd4cb2f38628f02c22",
-  "modification": "Retain numeric, boolean and duplicate-key validation; require human review when the evaluated case count is zero.",
-  "distributed_script_sha256": "a56e9751a5250fa072d2c8df6124a455ee3c2319184c208abc77bd98a8374852"
+  "based_on_public_commit": "d83d465750774f14f26ac342c4bb4c1f04cc1efc",
+  "modification": "Retain existing validation; require human review when an explicit result list length differs from the declared case count; preserve both counts.",
+  "distributed_script_sha256": "fb08d40b6340d7b3e52bf14e4f8f8f4205aeb17ff5a9c02125b0be81a617ac38"
 }
